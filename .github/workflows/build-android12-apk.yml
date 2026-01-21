@@ -1,0 +1,125 @@
+name: Build Android 12 Compatible APK
+
+on:
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Clean install dependencies
+      run: |
+        rm -rf node_modules package-lock.json
+        npm install
+        
+    - name: Build React app
+      run: npm run build
+      
+    - name: Remove existing Android platform
+      run: |
+        if [ -d "android" ]; then
+          rm -rf android
+        fi
+        
+    - name: Initialize Capacitor
+      run: npx cap init RevarseHallX com.revarsehallx.app
+        
+    - name: Add Android platform
+      run: npx cap add android
+        
+    - name: Configure for Android 12 compatibility
+      run: |
+        # Update for Android 12 (API 31)
+        sed -i 's/compileSdkVersion = 34/compileSdkVersion = 31/g' android/variables.gradle
+        sed -i 's/targetSdkVersion = 34/targetSdkVersion = 31/g' android/variables.gradle
+        sed -i 's/minSdkVersion = 24/minSdkVersion = 21/g' android/variables.gradle
+        
+        # Add Android 12 specific configurations
+        cat >> android/app/build.gradle << 'EOF'
+        
+        android {
+            packagingOptions {
+                pickFirst '**/libc++_shared.so'
+                pickFirst '**/libjsc.so'
+                exclude 'META-INF/DEPENDENCIES'
+                exclude 'META-INF/LICENSE'
+                exclude 'META-INF/LICENSE.txt'
+                exclude 'META-INF/NOTICE'
+                exclude 'META-INF/NOTICE.txt'
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_11
+                targetCompatibility JavaVersion.VERSION_11
+            }
+        }
+        EOF
+        
+        # Update AndroidManifest.xml for Android 12
+        sed -i 's/android:exported="true"/android:exported="true"\n        android:theme="@style\/AppTheme.NoActionBarLaunch"/g' android/app/src/main/AndroidManifest.xml
+        
+    - name: Sync Capacitor
+      run: npx cap sync android
+      
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+      
+    - name: Build Android 12 APK
+      run: |
+        cd android
+        ./gradlew assembleDebug --stacktrace
+        
+    - name: Verify APK was created
+      run: |
+        if [ ! -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "❌ APK not found"
+          find android/app/build -name "*.apk" || echo "No APK files found"
+          exit 1
+        else
+          echo "✅ Android 12 Compatible APK created!"
+          ls -la android/app/build/outputs/apk/debug/
+          echo "APK Size: $(du -h android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+        fi
+        
+    - name: Upload Android 12 APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: revarsehallx-android12-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+        
+    - name: Build Success Summary
+      run: |
+        echo "🎉 Android 12 Compatible APK Ready!"
+        echo ""
+        echo "📱 Optimized for Android 12:"
+        echo "- Target SDK: 31 (Android 12)"
+        echo "- Min SDK: 21 (Android 5.0+)"
+        echo "- Java 11 compatibility"
+        echo "- Android 12 manifest configurations"
+        echo ""
+        echo "📥 Download: revarsehallx-android12-apk"
+        echo "🔧 Installation: Use ADB or enable 'Install unknown apps'"
