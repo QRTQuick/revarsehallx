@@ -1,0 +1,165 @@
+name: Build Tecno Pop 8 Optimized APK
+
+on:
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Clean install dependencies
+      run: |
+        rm -rf node_modules package-lock.json
+        npm install
+        
+    - name: Build React app (optimized)
+      run: npm run build
+      
+    - name: Remove existing Android platform
+      run: |
+        if [ -d "android" ]; then
+          rm -rf android
+        fi
+        
+    - name: Initialize Capacitor
+      run: npx cap init RevarseHallX com.revarsehallx.app
+        
+    - name: Add Android platform
+      run: npx cap add android
+        
+    - name: Configure for Tecno Pop 8 (Android Go)
+      run: |
+        # Optimize for Android Go Edition (lower resources)
+        sed -i 's/compileSdkVersion = 34/compileSdkVersion = 31/g' android/variables.gradle
+        sed -i 's/targetSdkVersion = 34/targetSdkVersion = 31/g' android/variables.gradle
+        sed -i 's/minSdkVersion = 24/minSdkVersion = 21/g' android/variables.gradle
+        
+        # Add Tecno/HiOS specific configurations
+        cat >> android/app/build.gradle << 'EOF'
+        
+        android {
+            packagingOptions {
+                pickFirst '**/libc++_shared.so'
+                pickFirst '**/libjsc.so'
+                exclude 'META-INF/DEPENDENCIES'
+                exclude 'META-INF/LICENSE'
+                exclude 'META-INF/LICENSE.txt'
+                exclude 'META-INF/NOTICE'
+                exclude 'META-INF/NOTICE.txt'
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
+            
+            // Optimize for low-end devices (Tecno Pop 8)
+            buildTypes {
+                debug {
+                    minifyEnabled true
+                    shrinkResources true
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+            }
+            
+            // ARM64 optimization for UNISOC Tiger T606
+            splits {
+                abi {
+                    enable true
+                    reset()
+                    include "arm64-v8a", "armeabi-v7a"
+                    universalApk true
+                }
+            }
+        }
+        EOF
+        
+        # Update AndroidManifest.xml for HiOS compatibility
+        sed -i 's/android:theme="@style\/AppTheme"/android:theme="@style\/AppTheme"\n        android:requestLegacyExternalStorage="true"\n        android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
+        
+        # Add HiOS permissions
+        cat >> android/app/src/main/AndroidManifest.xml << 'EOF'
+        
+        <!-- Tecno HiOS specific permissions -->
+        <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+        <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+        EOF
+        
+    - name: Sync Capacitor
+      run: npx cap sync android
+      
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+      
+    - name: Build Tecno Optimized APK
+      run: |
+        cd android
+        ./gradlew assembleDebug --stacktrace -Pandroid.enableR8.fullMode=true
+        
+    - name: Verify APK was created
+      run: |
+        if [ ! -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "❌ APK not found"
+          find android/app/build -name "*.apk" || echo "No APK files found"
+          exit 1
+        else
+          echo "✅ Tecno Pop 8 Optimized APK created!"
+          ls -la android/app/build/outputs/apk/debug/
+          echo "APK Size: $(du -h android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+          
+          # Check if universal APK was created
+          if [ -f "android/app/build/outputs/apk/debug/app-universal-debug.apk" ]; then
+            echo "✅ Universal APK also created!"
+            echo "Universal APK Size: $(du -h android/app/build/outputs/apk/debug/app-universal-debug.apk | cut -f1)"
+          fi
+        fi
+        
+    - name: Upload Tecno APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: revarsehallx-tecno-pop8-apk
+        path: android/app/build/outputs/apk/debug/*.apk
+        retention-days: 30
+        
+    - name: Build Success Summary
+      run: |
+        echo "🎉 Tecno Pop 8 Optimized APK Ready!"
+        echo ""
+        echo "📱 Optimized for Tecno Pop 8:"
+        echo "- Android 12 Go Edition compatible"
+        echo "- UNISOC Tiger T606 processor optimized"
+        echo "- ARM64 + ARM32 support"
+        echo "- HiOS security compatibility"
+        echo "- Reduced APK size for 3GB RAM"
+        echo "- Legacy storage support"
+        echo ""
+        echo "📥 Installation on Tecno:"
+        echo "1. Use Tecno File Manager (recommended)"
+        echo "2. Enable 'Unknown sources' in Security settings"
+        echo "3. Temporarily disable HiOS security scanning"
+        echo "4. Or use ADB method for guaranteed installation"
+        echo ""
+        echo "📦 Download: revarsehallx-tecno-pop8-apk"
