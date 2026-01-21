@@ -1,0 +1,101 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/status-bar @capacitor/splash-screen @capacitor/keyboard @capacitor/storage
+        
+    - name: Build React app
+      run: npm run build
+      
+    - name: Initialize Capacitor (if needed)
+      run: |
+        if [ ! -f "capacitor.config.ts" ]; then
+          npx cap init RevarseHallX com.revarsehallx.app
+        fi
+        
+    - name: Add Android platform
+      run: |
+        if [ ! -d "android" ]; then
+          npx cap add android
+        fi
+        
+    - name: Sync Capacitor
+      run: npx cap sync android
+      
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+      
+    - name: Build Debug APK
+      run: |
+        cd android
+        ./gradlew assembleDebug
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: revarsehallx-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+        
+    - name: Create Release (on main branch)
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: RevarseHallX v${{ github.run_number }}
+        body: |
+          🚀 **RevarseHallX Mobile App**
+          
+          📱 **Download APK**: Click on the APK file below to download
+          
+          ✨ **Features**:
+          - Black & Red theme with orange accents
+          - HX logo with animated navigation  
+          - Persistent local storage on device
+          - Offline functionality
+          - Message tracking and follow-ups
+          
+          📋 **Installation**:
+          1. Download the APK file
+          2. Enable "Install from unknown sources" on your Android device
+          3. Install the APK
+          4. Enjoy tracking your messages!
+          
+          🔒 **Privacy**: All data is stored locally on your device
+        files: |
+          android/app/build/outputs/apk/debug/app-debug.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
