@@ -38,20 +38,33 @@ jobs:
     - name: Build React app
       run: npm run build
       
-    - name: Initialize Capacitor (if needed)
+    - name: Remove existing Android platform
+      run: |
+        if [ -d "android" ]; then
+          rm -rf android
+        fi
+        
+    - name: Initialize Capacitor
       run: |
         if [ ! -f "capacitor.config.ts" ]; then
           npx cap init RevarseHallX com.revarsehallx.app
         fi
         
-    - name: Add Android platform
-      run: |
-        if [ ! -d "android" ]; then
-          npx cap add android
-        fi
+    - name: Add Android platform (fresh)
+      run: npx cap add android
         
     - name: Sync Capacitor
       run: npx cap sync android
+      
+    - name: Verify gradlew exists
+      run: |
+        if [ ! -f "android/gradlew" ]; then
+          echo "❌ gradlew not found, listing android directory:"
+          ls -la android/
+          exit 1
+        else
+          echo "✅ gradlew found"
+        fi
       
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
@@ -59,7 +72,18 @@ jobs:
     - name: Build Debug APK
       run: |
         cd android
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --stacktrace
+        
+    - name: Verify APK was created
+      run: |
+        if [ ! -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "❌ APK not found, listing build outputs:"
+          find android/app/build -name "*.apk" || echo "No APK files found"
+          exit 1
+        else
+          echo "✅ APK created successfully"
+          ls -la android/app/build/outputs/apk/debug/
+        fi
         
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4

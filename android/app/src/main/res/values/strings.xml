@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">RevarseHallX</string>
-    <string name="title_activity_main">RevarseHallX</string>
-    <string name="package_name">com.revarsehallx.app</string>
-    <string name="custom_url_scheme">com.revarsehallx.app</string>
-</resources>

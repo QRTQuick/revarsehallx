@@ -30,16 +30,8 @@ build/
 ehthumbs.db
 Thumbs.db
 
-# Capacitor
-android/app/build/
-android/app/release/
-android/build/
-android/.gradle/
-android/gradle/
-android/gradlew
-android/gradlew.bat
-android/local.properties
-android/app/src/main/assets/public/
+# Capacitor - Let GitHub Actions generate fresh Android platform
+android/
 
 # iOS (if added later)
 ios/build/
