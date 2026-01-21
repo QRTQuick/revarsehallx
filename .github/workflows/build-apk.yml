@@ -18,22 +18,22 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
         
     - name: Setup Java JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '21'
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       
-    - name: Install dependencies
+    - name: Clean install dependencies
       run: |
-        npm ci
-        npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/status-bar @capacitor/splash-screen @capacitor/keyboard @capacitor/storage
+        rm -rf node_modules package-lock.json
+        npm install
         
     - name: Build React app
       run: npm run build
