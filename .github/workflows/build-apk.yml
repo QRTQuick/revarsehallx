@@ -7,6 +7,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch: # Allows manual trigger
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -88,13 +92,14 @@ jobs:
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: revarsehallx-debug-apk
+        name: revarsehallx-debug-apk-v${{ github.run_number }}
         path: android/app/build/outputs/apk/debug/app-debug.apk
         retention-days: 30
         
     - name: Create Release (on main branch)
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: softprops/action-gh-release@v1
+      continue-on-error: true
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ github.run_number }}
         name: RevarseHallX v${{ github.run_number }}
@@ -123,3 +128,19 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build Success Summary
+      run: |
+        echo "🎉 APK Build Completed Successfully!"
+        echo ""
+        echo "📱 Your APK is ready for download:"
+        echo "1. Go to Actions tab: https://github.com/${{ github.repository }}/actions"
+        echo "2. Click on this workflow run"
+        echo "3. Download 'revarsehallx-debug-apk-v${{ github.run_number }}' artifact"
+        echo ""
+        echo "📦 APK Details:"
+        echo "- File: app-debug.apk"
+        echo "- Size: $(du -h android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+        echo "- Build: v${{ github.run_number }}"
+        echo ""
+        echo "🔒 Privacy: All data stored locally on device"
