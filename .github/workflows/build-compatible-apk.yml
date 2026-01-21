@@ -1,0 +1,131 @@
+name: Build Compatible APK (Lower SDK)
+
+on:
+  workflow_dispatch: # Manual trigger only
+    inputs:
+      target_sdk:
+        description: 'Target SDK Version'
+        required: true
+        default: '28'
+        type: choice
+        options:
+        - '28'
+        - '30'
+        - '33'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Clean install dependencies
+      run: |
+        rm -rf node_modules package-lock.json
+        npm install
+        
+    - name: Build React app
+      run: npm run build
+      
+    - name: Remove existing Android platform
+      run: |
+        if [ -d "android" ]; then
+          rm -rf android
+        fi
+        
+    - name: Initialize Capacitor
+      run: |
+        if [ ! -f "capacitor.config.ts" ]; then
+          npx cap init RevarseHallX com.revarsehallx.app
+        fi
+        
+    - name: Add Android platform (fresh)
+      run: npx cap add android
+        
+    - name: Configure for compatibility
+      run: |
+        # Update variables.gradle for lower SDK
+        sed -i "s/compileSdkVersion = 34/compileSdkVersion = ${{ github.event.inputs.target_sdk }}/g" android/variables.gradle
+        sed -i "s/targetSdkVersion = 34/targetSdkVersion = ${{ github.event.inputs.target_sdk }}/g" android/variables.gradle
+        sed -i "s/minSdkVersion = 24/minSdkVersion = 21/g" android/variables.gradle
+        
+        # Update app build.gradle for better compatibility
+        cat >> android/app/build.gradle << 'EOF'
+        
+        android {
+            packagingOptions {
+                pickFirst '**/libc++_shared.so'
+                pickFirst '**/libjsc.so'
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
+        }
+        EOF
+        
+    - name: Sync Capacitor
+      run: npx cap sync android
+      
+    - name: Grant execute permission for gradlew
+      run: chmod +x android/gradlew
+      
+    - name: Build Universal APK (More Compatible)
+      run: |
+        cd android
+        ./gradlew assembleDebug -Pandroid.bundle.enableUncompressedNativeLibs=false
+        
+    - name: Verify APK was created
+      run: |
+        if [ ! -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "❌ APK not found"
+          find android/app/build -name "*.apk" || echo "No APK files found"
+          exit 1
+        else
+          echo "✅ Compatible APK created successfully"
+          ls -la android/app/build/outputs/apk/debug/
+          echo "APK Size: $(du -h android/app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+        fi
+        
+    - name: Upload Compatible APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: revarsehallx-compatible-apk-sdk${{ github.event.inputs.target_sdk }}
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
+        
+    - name: Build Success Summary
+      run: |
+        echo "🎉 Compatible APK Build Completed!"
+        echo ""
+        echo "📱 Configuration:"
+        echo "- Target SDK: ${{ github.event.inputs.target_sdk }}"
+        echo "- Min SDK: 21 (Android 5.0+)"
+        echo "- Universal APK: Yes (better compatibility)"
+        echo "- Java: 1.8 (maximum compatibility)"
+        echo ""
+        echo "📦 Download from Actions artifacts:"
+        echo "- Name: revarsehallx-compatible-apk-sdk${{ github.event.inputs.target_sdk }}"
+        echo "- This APK should work on more devices!"
